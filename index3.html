@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kalkulator Maintenance Mesin</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center">
+  <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-4xl">
+    <h1 class="text-2xl font-bold text-center mb-6">Kalkulator Maintenance Mesin</h1>
+
+    <div id="formContainer" class="space-y-4"></div>
+
+    <div class="flex justify-between mt-4">
+      <button onclick="tambahForm()" class="bg-green-600 text-white py-2 px-4 rounded hover:bg-green-700 transition">+ Tambah Mesin</button>
+      <button onclick="hitungSemua()" class="bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 transition">Hitung Semua</button>
+    </div>
+
+    <div id="hasilContainer" class="mt-6 hidden">
+      <h2 class="font-bold text-lg mb-2">Hasil Perhitungan:</h2>
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-sm border">
+          <thead class="bg-gray-200">
+            <tr>
+              <th class="border px-4 py-2">#</th>
+              <th class="border px-4 py-2">Nama Mesin</th>
+              <th class="border px-4 py-2">Tanggal Maintenance Berikutnya</th>
+              <th class="border px-4 py-2">Status</th>
+            </tr>
+          </thead>
+          <tbody id="hasilTable" class="text-center"></tbody>
+        </table>
+      </div>
+      <button onclick="downloadPDF()" class="mt-4 bg-green-600 text-white py-2 px-4 rounded hover:bg-green-700 transition">Unduh PDF</button>
+    </div>
+  </div>
+
+  <script>
+    let counter = 0;
+
+    function tambahForm() {
+      counter++;
+      const form = document.createElement("div");
+      form.className = "bg-gray-50 p-4 border rounded relative";
+      form.setAttribute("data-index", counter);
+      form.innerHTML = `
+        <button onclick="hapusForm(${counter})" class="absolute top-2 right-2 text-red-500">Hapus</button>
+        <label class="block font-semibold">Nama Mesin</label>
+        <input type="text" id="namaMesin-${counter}" class="w-full p-2 border rounded mb-2" placeholder="Contoh: Mesin Press 01">
+        <label class="block font-semibold">Jam Kerja per Hari</label>
+        <input type="number" id="jamPerHari-${counter}" class="w-full p-2 border rounded mb-2" placeholder="Contoh: 8">
+        <label class="block font-semibold">Tanggal Terakhir Maintenance</label>
+        <input type="date" id="tanggalTerakhir-${counter}" class="w-full p-2 border rounded mb-2">
+        <label class="block font-semibold">Interval Maintenance (hari)</label>
+        <input type="number" id="intervalMaintenance-${counter}" class="w-full p-2 border rounded">
+      `;
+      document.getElementById("formContainer").appendChild(form);
+    }
+
+    function hapusForm(id) {
+      const form = document.querySelector(`[data-index='${id}']`);
+      form.remove();
+    }
+
+    function hitungSemua() {
+      const hasilTable = document.getElementById("hasilTable");
+      hasilTable.innerHTML = "";
+      const forms = document.querySelectorAll("[data-index]");
+      let dataPDF = [];
+
+      forms.forEach((form, i) => {
+        const idx = form.getAttribute("data-index");
+        const nama = document.getElementById(`namaMesin-${idx}`).value;
+        const jam = parseFloat(document.getElementById(`jamPerHari-${idx}`).value);
+        const tanggalTerakhir = new Date(document.getElementById(`tanggalTerakhir-${idx}`).value);
+        const interval = parseInt(document.getElementById(`intervalMaintenance-${idx}`).value);
+
+        if (!nama || isNaN(jam) || isNaN(interval) || isNaN(tanggalTerakhir.getTime())) return;
+
+        const berikutnya = new Date(tanggalTerakhir);
+        berikutnya.setDate(berikutnya.getDate() + interval);
+        const hariIni = new Date();
+
+        let status = "🟢 Normal";
+        if (hariIni >= berikutnya) status = "🔴 Overdue (Lewat Jadwal)";
+        else if ((berikutnya - hariIni) / (1000 * 60 * 60 * 24) <= 3) status = "🟡 Segera Maintenance";
+
+        const tanggalStr = berikutnya.toLocaleDateString("id-ID");
+
+        const row = `
+          <tr>
+            <td class="border px-4 py-2">${i + 1}</td>
+            <td class="border px-4 py-2">${nama}</td>
+            <td class="border px-4 py-2">${tanggalStr}</td>
+            <td class="border px-4 py-2">${status}</td>
+          </tr>
+        `;
+        hasilTable.innerHTML += row;
+
+        dataPDF.push([nama, tanggalStr, status.replace(/^[^\w\s]+ /, "")]);
+      });
+
+      window.dataUntukPDF = dataPDF;
+      document.getElementById("hasilContainer").classList.remove("hidden");
+    }
+
+    function downloadPDF() {
+      const jsPDF = window.jspdf.jsPDF;
+      const doc = new jsPDF();
+
+      doc.setFontSize(16);
+      doc.text("LAPORAN MAINTENANCE MESIN", 105, 20, null, null, "center");
+
+      doc.autoTable({
+        startY: 30,
+        head: [["Nama Mesin", "Tanggal Maintenance Berikutnya", "Status"]],
+        body: window.dataUntukPDF || [],
+        theme: "grid",
+        headStyles: {
+          fillColor: [22, 160, 133],
+          halign: "center",
+          valign: "middle"
+        },
+        styles: {
+          halign: "center"
+        }
+      });
+
+      doc.save("laporan_maintenance.pdf");
+    }
+
+    // Tambah satu form default
+    tambahForm();
+  </script>
+</body>
+</html>
